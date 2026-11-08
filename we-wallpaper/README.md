@@ -1,12 +1,12 @@
 # Wallpaper Engine 原生联动
 
-Windows x64 / Folia 0.7.27 / Wallpaper Engine，先行测试版 0.3.1。
+Windows x64 / Folia 0.7.27 / Wallpaper Engine，先行测试版 0.3.2。
 
 由 Wallpaper Engine 原程序运行已安装的场景、视频或网页壁纸，通过 Windows Graphics Capture、D3D11 共享纹理接入 Folia 背景，再由 Folia 绘制歌词。模组不复制壁纸工程，也不在 Folia 渲染进程执行工坊脚本。
 
 ## 安装与使用
 
-将 release zip 拖入 Folia 的模组面板，确认并启用。在「歌词样式 → 背景」选择「Wallpaper Engine 原生画面」，选择已安装的壁纸及 WE 保存的预设。选中本背景才启动捕获；换成其他背景停止模组专用渲染。参数保存在本模组数据目录。
+将 release zip 拖入 Folia 的模组面板，确认并启用。在「歌词样式 → 背景」选择「Wallpaper Engine 原生画面」，选择已安装的壁纸及 WE 保存的预设。选中本背景才启动捕获；换成其他背景停止模组专用渲染。若原版「透明背景」处于开启状态，选择 WE 背景后会关闭它，使用 Folia 自身的歌曲、播放进度和状态交接恢复窗口，避免背景层被透明模式跳过。参数保存在本模组数据目录。
 
 「显示到桌面」将当前 Folia 窗口放入 Windows 桌面层。「选歌」恢复普通窗口。此桌面会话由模组自己管理，独立于 Folia 自带的桌面模式；不要同时启用两套桌面模式。鼠标靠近右下角显示导航按钮，移开后淡出。
 

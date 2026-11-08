@@ -10,6 +10,7 @@ const { WeRuntime } = require('./weRuntime.cjs');
 const { createWeDesktop } = require('./weDesktop.cjs');
 const { createDesktopHost, mainWindow } = require('./desktopHost.cjs');
 const { randomBytes } = require('crypto');
+const { capturePlaybackForOpaque } = require('./opaqueBackground.cjs');
 
 // The mod controls WE and supplies its native frames to the existing Folia background registry.
 module.exports = function activate(api) {
@@ -164,6 +165,10 @@ module.exports = function activate(api) {
     handle('stop', async consumerId => { await ready; await runtime.stop(consumerId); });
     handle('status', async () => { await ready; return runtime.status(); });
     handle('desktop-state', async () => { await ready; return host.state(); });
+    handle('capture-for-opaque', async () => {
+        await ready;
+        return capturePlaybackForOpaque(mainWindow());
+    });
     handle('enter-desktop', async () => { await ready; return host.setEnabled(true); });
     handle('leave-desktop', async () => { await ready; return host.setEnabled(false); });
     handle('prepare-desktop', async () => {

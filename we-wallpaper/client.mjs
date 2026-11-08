@@ -5,11 +5,13 @@ import { mountPicker } from './client/picker.mjs';
 import { createPropertySettings } from './client/properties.mjs';
 import { createDesktopNavigation, mountNavigation } from './client/navigation.mjs';
 import { NATIVE_VERSION, isMainContext, callHost } from './client/support.mjs';
+import { watchOpaqueBackground } from './client/opaque.mjs';
 
 // Keep the established background id so existing Folia selections continue to work.
 export default function activate(folium) {
     if (!isMainContext(folium) || window.foliaWeNative?.version !== NATIVE_VERSION) return;
     const navigation = createDesktopNavigation(folium);
+    watchOpaqueBackground(folium);
     folium.registries.styles.register({ id: 'native-wallpaper', css: styles });
     const properties = createPropertySettings(folium);
     folium.onDispose(() => properties.dispose());
