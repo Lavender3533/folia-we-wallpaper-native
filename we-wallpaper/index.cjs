@@ -14,6 +14,8 @@ const { randomBytes } = require('crypto');
 // The mod controls WE and supplies its native frames to the existing Folia background registry.
 module.exports = function activate(api) {
     if (process.platform !== 'win32' || process.arch !== 'x64') throw new Error('Wallpaper Engine 原生联动当前仅支持 Windows x64');
+    // Folium 1's manifest parser rejects prerelease suffixes before loading the mod.
+    if (!/^0\.7\.27(?:[-+].+)?$/.test(app.getVersion())) throw new Error('Wallpaper Engine 原生联动需要 Folia 0.7.27（含 beta 构建），当前版本：' + app.getVersion());
     const catalog = new WallpaperCatalog();
     let runtime;
     let desktop;

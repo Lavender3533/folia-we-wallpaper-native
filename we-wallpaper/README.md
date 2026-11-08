@@ -1,6 +1,6 @@
 # Wallpaper Engine 原生联动
 
-Windows x64 / Folia 0.7.27 / Wallpaper Engine，先行测试版 0.3.0。
+Windows x64 / Folia 0.7.27 / Wallpaper Engine，先行测试版 0.3.1。
 
 由 Wallpaper Engine 原程序运行已安装的场景、视频或网页壁纸，通过 Windows Graphics Capture、D3D11 共享纹理接入 Folia 背景，再由 Folia 绘制歌词。模组不复制壁纸工程，也不在 Folia 渲染进程执行工坊脚本。
 
@@ -12,7 +12,7 @@ Windows x64 / Folia 0.7.27 / Wallpaper Engine，先行测试版 0.3.0。
 
 ## 范围
 
-仅支持 Windows x64，当前适配并约束 Folia 0.7.27。需要用户自行安装并运行 Wallpaper Engine、已有可用的壁纸；本包不包含 Wallpaper Engine 或工坊壁纸。
+仅支持 Windows x64，兼容 Folia 0.7.27 正式版及 0.7.27-beta.* 构建。由于 Folium 1 的清单版本比较不识别 beta 后缀，本包在入口按 app.getVersion() 校验 0.7.27 版本，其他版本会拒绝加载。需要用户自行安装并运行 Wallpaper Engine、已有可用的壁纸；本包不包含 Wallpaper Engine 或工坊壁纸。
 
 这是原生 GPU 捕获的实验实现。桌面挂载、鼠标转发、窗口几何等依赖 Windows 桌面结构；当前桌面输出仅支持主显示器（WE Monitor0）。原生捕获暂不提供 OBS 或视频导出，预览只使用壁纸自己的介绍图。后台恢复偶尔仍可看到歌词短暂追帧，未宣称所有驱动和桌面环境都无缝。
 
