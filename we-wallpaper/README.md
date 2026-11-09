@@ -1,6 +1,6 @@
 # Wallpaper Engine 原生联动
 
-Windows x64 / Folia 0.7.27 / Wallpaper Engine，先行测试版 0.3.3。
+Windows x64 / Folia 0.7.27 / Wallpaper Engine，先行测试版 0.3.4。
 
 由 Wallpaper Engine 原程序运行已安装的场景、视频或网页壁纸，通过 Windows Graphics Capture、D3D11 共享纹理接入 Folia 背景，再由 Folia 绘制歌词。模组不复制壁纸工程，也不在 Folia 渲染进程执行工坊脚本。
 

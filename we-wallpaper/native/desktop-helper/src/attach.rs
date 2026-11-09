@@ -12,12 +12,12 @@ use windows::core::s;
 use windows::core::BOOL;
 use windows::Win32::Foundation::{HWND, LPARAM, POINT, RECT, WPARAM};
 use windows::Win32::Graphics::Gdi::{
-    GetMonitorInfoW, MonitorFromWindow, ScreenToClient, HMONITOR, MONITORINFO, MONITOR_DEFAULTTONEAREST,
+    ClientToScreen, GetMonitorInfoW, MonitorFromWindow, ScreenToClient, HMONITOR, MONITORINFO, MONITOR_DEFAULTTONEAREST,
 };
 use windows::Win32::UI::WindowsAndMessaging::{
-    EnumWindows, FindWindowA, FindWindowExA, GetAncestor, GetWindow, GetWindowLongPtrW, GetWindowRect,
+    EnumWindows, FindWindowA, FindWindowExA, GetAncestor, GetClientRect, GetWindow, GetWindowLongPtrW, GetWindowRect,
     IsWindow, SendMessageTimeoutW, SetParent, SetWindowLongPtrW, SetWindowPos, GA_PARENT, GW_CHILD,
-    GWL_EXSTYLE, GWL_STYLE, HWND_TOP, SMTO_NORMAL, SWP_ASYNCWINDOWPOS, SWP_NOACTIVATE,
+    GWL_EXSTYLE, GWL_STYLE, HWND_TOP, SMTO_NORMAL, SWP_ASYNCWINDOWPOS, SWP_FRAMECHANGED, SWP_NOACTIVATE,
     SWP_NOMOVE, SWP_NOSIZE, SWP_NOZORDER, SWP_SHOWWINDOW, WINDOW_EX_STYLE, WINDOW_STYLE,
     WS_CHILDWINDOW, WS_CLIPSIBLINGS, WS_EX_ACCEPTFILES, WS_EX_APPWINDOW, WS_EX_WINDOWEDGE,
     WS_CAPTION, WS_THICKFRAME,
@@ -394,6 +394,7 @@ unsafe fn reassert_geometry_on_monitor(hwnd: HWND, monitor: HMONITOR) {
         }
         let width = rect.right - rect.left;
         let height = rect.bottom - rect.top;
+        // Complete WM_NCCALCSIZE before measuring Chromium's remaining frameless insets.
         let _ = SetWindowPos(
             hwnd,
             None,
@@ -401,8 +402,32 @@ unsafe fn reassert_geometry_on_monitor(hwnd: HWND, monitor: HMONITOR) {
             origin.y,
             width,
             height,
-            SWP_ASYNCWINDOWPOS | SWP_NOACTIVATE | SWP_NOZORDER | SWP_SHOWWINDOW,
+            SWP_FRAMECHANGED | SWP_NOACTIVATE | SWP_NOZORDER | SWP_SHOWWINDOW,
         );
+        let mut outer = RECT::default();
+        let mut client = RECT::default();
+        let mut client_origin = POINT::default();
+        if GetWindowRect(hwnd, &mut outer).is_err()
+            || GetClientRect(hwnd, &mut client).is_err()
+            || !ClientToScreen(hwnd, &mut client_origin).as_bool()
+        {
+            return;
+        }
+        let inset_x = client_origin.x - outer.left;
+        let inset_y = client_origin.y - outer.top;
+        let extra_width = (outer.right - outer.left) - (client.right - client.left);
+        let extra_height = (outer.bottom - outer.top) - (client.bottom - client.top);
+        if extra_width != 0 || extra_height != 0 {
+            let _ = SetWindowPos(
+                hwnd,
+                None,
+                origin.x - inset_x,
+                origin.y - inset_y,
+                width + extra_width,
+                height + extra_height,
+                SWP_NOACTIVATE | SWP_NOZORDER | SWP_SHOWWINDOW,
+            );
+        }
     });
 }
 
