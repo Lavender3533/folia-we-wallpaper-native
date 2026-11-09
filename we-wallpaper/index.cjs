@@ -165,6 +165,7 @@ module.exports = function activate(api) {
     handle('stop', async consumerId => { await ready; await runtime.stop(consumerId); });
     handle('status', async () => { await ready; return runtime.status(); });
     handle('desktop-state', async () => { await ready; return host.state(); });
+    handle('desktop-input-regions', async rects => { await ready; host.updateInput(rects); });
     handle('capture-for-opaque', async () => {
         await ready;
         return capturePlaybackForOpaque(mainWindow());

@@ -6,6 +6,7 @@ import { createPropertySettings } from './client/properties.mjs';
 import { createDesktopNavigation, mountNavigation } from './client/navigation.mjs';
 import { NATIVE_VERSION, isMainContext, callHost } from './client/support.mjs';
 import { watchOpaqueBackground } from './client/opaque.mjs';
+import { mountDesktopInput } from './client/input.mjs';
 
 // Keep the established background id so existing Folia selections continue to work.
 export default function activate(folium) {
@@ -64,7 +65,11 @@ export default function activate(folium) {
     });
     if (navigation) folium.registries.stageLayers.register({
         id: 'desktop-navigation', slot: 'app.overlay', order: 100,
-        mount: (container, ctx) => mountNavigation(folium, container, ctx, navigation),
+        mount: (container, ctx) => {
+            const stopNavigation = mountNavigation(folium, container, ctx, navigation);
+            const stopInput = mountDesktopInput(folium, ctx, navigation);
+            return () => { stopInput(); stopNavigation?.(); };
+        },
     });
     folium.registries.commands.register({
         id: 'refresh-we-wallpapers',

@@ -127,7 +127,7 @@ export function mountNavigation(folium, container, ctx, navigation) {
     folium.ui.icon('list-music', { size: 16 }).then(icon => { if (icon && !disposed) button.prepend(icon); });
     const render = () => {
         const display = ctx.getDisplay();
-        const unavailable = navigation.desktop || display.isPlayerChromeHidden || display.visualizerOpacity === 0;
+        const unavailable = display.isPlayerChromeHidden || display.visualizerOpacity === 0;
         const hidden = unavailable || (!nearby && !keyboardFocused);
         caption.textContent = navigation.desktop ? t('chooseSong') : t('returnDesktop');
         button.disabled = navigation.busy || unavailable;

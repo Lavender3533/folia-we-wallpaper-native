@@ -1,5 +1,5 @@
 // Official Folia mounts identify previews in the DOM; staticMode also changes on the live player.
-export const NATIVE_VERSION = '0.3.4';
+export const NATIVE_VERSION = '0.3.5';
 
 export function callHost(name, ...args) {
     return window.foliaWeNative.request(name, args);

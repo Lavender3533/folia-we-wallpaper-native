@@ -62,3 +62,25 @@ pub fn pointer(raw: *mut std::ffi::c_void, kind: &str, x: i32, y: i32, buttons: 
     let parameter = if kind == "wheel" { ((delta as u16 as usize) << 16) | flags } else { flags };
     unsafe { PostMessageW(Some(HWND(raw)), message, WPARAM(parameter), coordinates) }
 }
+
+// The input surface belongs above desktop icons and below ordinary application windows.
+pub fn place_above_desktop(raw: *mut std::ffi::c_void) -> windows::core::Result<()> {
+    unsafe extern "system" fn find_icons(hwnd: HWND, data: LPARAM) -> BOOL {
+        use windows::core::s;
+        if unsafe { FindWindowExA(Some(hwnd), None, s!("SHELLDLL_DefView"), None) }.is_ok() {
+            unsafe { *(data.0 as *mut HWND) = hwnd; }
+            return BOOL(0);
+        }
+        BOOL(1)
+    }
+    unsafe {
+        let mut icons = HWND::default();
+        let _ = EnumWindows(Some(find_icons), LPARAM(&mut icons as *mut HWND as isize));
+        if icons.0.is_null() { return Err(windows::core::Error::new(windows::core::HRESULT(0x80004005u32 as i32), "Desktop icon window not found")); }
+        let hwnd = HWND(raw);
+        let previous = GetWindow(icons, GW_HWNDPREV).unwrap_or(HWND_TOP);
+        if previous == hwnd { return Ok(()); }
+        let after = if GetWindowLongPtrW(previous, GWL_EXSTYLE) as u32 & WS_EX_TOPMOST.0 != 0 { HWND_TOP } else { previous };
+        SetWindowPos(hwnd, Some(after), 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE)
+    }
+}

@@ -143,3 +143,9 @@ pub fn pointer(hwnd: String, kind: String, x: i32, y: i32, buttons: u32, delta: 
     source::pointer(source::parse_hwnd(&hwnd)?, &kind, x, y, buttons, delta)
         .map_err(|error| Error::from_reason(error.to_string()))
 }
+
+#[napi]
+pub fn place_above_desktop(hwnd: String) -> Result<()> {
+    source::place_above_desktop(source::parse_hwnd(&hwnd)?)
+        .map_err(|error| Error::from_reason(error.to_string()))
+}

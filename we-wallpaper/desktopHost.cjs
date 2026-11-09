@@ -7,6 +7,7 @@ const { promisify } = require('util');
 const { fileURLToPath } = require('url');
 const { createWindowsWallpaperController } = require('./desktop/controller.cjs');
 const { createDesktopTray } = require('./desktop/tray.cjs');
+const { createDesktopInput } = require('./desktop/input.cjs');
 const { createWindowsWallpaperPresentation } = require('./desktop/presentation.cjs');
 
 // Own the desktop session entirely inside this mod; the installed Folia files stay untouched.
@@ -28,6 +29,7 @@ function createDesktopHost({ storage, desktop, publish, log }) {
     let disposing = null;
     let bounds;
     let tray;
+    const input = createDesktopInput({ getWindow:mainWindow, log });
     const values = new Map();
     const helper = path.join(__dirname, 'bin/folia-wallpaper-helper.exe');
     const getHwnd = () => {
@@ -75,6 +77,7 @@ function createDesktopHost({ storage, desktop, publish, log }) {
             else await desktop.restore();
             enabled = next;
             await presenter.setEnabled(next);
+            input.setEnabled(next);
             if (!next) { tray?.destroy(); tray = null; }
             await storage.set('desktop-enabled', next);
             resume = next;
@@ -93,13 +96,14 @@ function createDesktopHost({ storage, desktop, publish, log }) {
                     try { await desktop.restore(); }
                     finally { await presenter.setEnabled(false); }
                 }
-            } finally { controller.killHelper(); tray?.destroy(); tray = null; }
+            } finally { controller.killHelper(); tray?.destroy(); tray = null; input.dispose(); }
         });
         return disposing;
     }
     return {
         async initialize() { resume = Boolean(await storage.get('desktop-enabled')); },
         state: () => ({ enabled, resume }),
+        updateInput: rects => input.update(rects),
         setEnabled, dispose,
     };
 }
