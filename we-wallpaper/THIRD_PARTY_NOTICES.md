@@ -2,7 +2,7 @@
 
 ## Folia desktop integration
 
-The desktop helper in native/desktop-helper/, desktop/controller.cjs and desktop/mouse.cjs are adapted from chthollyphile/folia-major (AGPL-3.0), based on Folia 0.7.27 and local integration changes. desktop/presentation.cjs originated in this integration work. Upstream source: https://github.com/chthollyphile/folia-major, tag v0.7.27 (4a545c96229664c0e07d4fb04971264e8d75fdd2). Original comments and provenance notes are retained, including the Seelen-derived WorkerW implementation in attach.rs. The full AGPL-3.0 license is included in LICENSE.
+The desktop helper in native/desktop-helper/ and desktop/controller.cjs are adapted from chthollyphile/folia-major (AGPL-3.0), based on Folia 0.7.27 and local integration changes. desktop/presentation.cjs originated in this integration work. Upstream source: https://github.com/chthollyphile/folia-major, tag v0.7.27 (4a545c96229664c0e07d4fb04971264e8d75fdd2). Original comments and provenance notes are retained, including the Seelen-derived WorkerW implementation in attach.rs. The full AGPL-3.0 license is included in LICENSE.
 
 ## Rust dependencies
 

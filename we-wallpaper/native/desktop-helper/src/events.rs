@@ -22,26 +22,6 @@ pub enum Event {
     Detached { hwnd: isize },
     /// Desktop wallpaper re-applied (`refresh` subcommand or after a detach).
     Refreshed,
-    /// Desktop mouse position update in *physical* screen pixels (the helper is per-monitor DPI
-    /// aware, so no Windows coordinate virtualization is involved; the main process converts them
-    /// into Chromium's DIP space with screen.screenToDipPoint), at the rate raw input arrives capped
-    /// to one report per 4 ms and gated by the desktop-foreground filter (see mouse_forward.rs for
-    /// why injection happens in the main process rather than via posted messages).
-    MouseMove { x: i32, y: i32 },
-    /// Primary (left) button press at the given position (physical screen pixels), only when it
-    /// lands on the desktop (whatever window holds the foreground). Sent immediately, not spaced
-    /// out.
-    MouseButtonDown { x: i32, y: i32 },
-    /// Primary button release (physical screen pixels). Sent even when the desktop is no longer
-    /// foreground while the button is tracked as held, so the renderer can never keep a stuck
-    /// pressed state.
-    MouseButtonUp { x: i32, y: i32 },
-    /// Wheel rotation at the given position (physical screen pixels) while the desktop is the
-    /// foreground window and under the cursor.
-    /// Deltas are raw-input notches in multiples of WHEEL_DELTA (120; hi-res wheels send
-    /// smaller per-packet increments) — positive vertical means rolled up/away from the user,
-    /// positive horizontal means rolled right. Exactly one axis is non-zero per packet.
-    MouseWheel { x: i32, y: i32, delta_x: i16, delta_y: i16 },
     /// Anything fatal or noteworthy that the main process should log or act on. `kind` is an
     /// optional structured error class the main process can branch on — the message text is
     /// for humans and must never be parsed (see ERR_KIND_WINDOW_DESTROYED).
@@ -83,10 +63,6 @@ impl Event {
             Event::Moved { .. } => "moved",
             Event::Detached { .. } => "detached",
             Event::Refreshed => "refreshed",
-            Event::MouseMove { .. } => "mousemove",
-            Event::MouseButtonDown { .. } => "mousedown",
-            Event::MouseButtonUp { .. } => "mouseup",
-            Event::MouseWheel { .. } => "mousewheel",
             Event::Error { .. } => "error",
         }
     }
@@ -107,18 +83,6 @@ impl Event {
             Event::Moved { hwnd } => format!("{{\"event\":\"moved\",\"hwnd\":{}}}", hwnd),
             Event::Detached { hwnd } => format!("{{\"event\":\"detached\",\"hwnd\":{}}}", hwnd),
             Event::Refreshed => "{\"event\":\"refreshed\"}".to_string(),
-            Event::MouseMove { x, y } => {
-                format!("{{\"event\":\"mousemove\",\"x\":{x},\"y\":{y}}}")
-            }
-            Event::MouseButtonDown { x, y } => {
-                format!("{{\"event\":\"mousedown\",\"x\":{x},\"y\":{y}}}")
-            }
-            Event::MouseButtonUp { x, y } => {
-                format!("{{\"event\":\"mouseup\",\"x\":{x},\"y\":{y}}}")
-            }
-            Event::MouseWheel { x, y, delta_x, delta_y } => {
-                format!("{{\"event\":\"mousewheel\",\"x\":{x},\"y\":{y},\"deltaX\":{delta_x},\"deltaY\":{delta_y}}}")
-            }
             Event::Error { message, kind } => match kind {
                 Some(kind) => format!(
                     "{{\"event\":\"error\",\"message\":\"{}\",\"kind\":\"{}\"}}",
@@ -179,22 +143,6 @@ mod tests {
             "{\"event\":\"detached\",\"hwnd\":5}"
         );
         assert_eq!(Event::Refreshed.to_json(), "{\"event\":\"refreshed\"}");
-        assert_eq!(
-            Event::MouseMove { x: 1920, y: 1080 }.to_json(),
-            "{\"event\":\"mousemove\",\"x\":1920,\"y\":1080}"
-        );
-        assert_eq!(
-            Event::MouseButtonDown { x: 10, y: 20 }.to_json(),
-            "{\"event\":\"mousedown\",\"x\":10,\"y\":20}"
-        );
-        assert_eq!(
-            Event::MouseButtonUp { x: 10, y: 20 }.to_json(),
-            "{\"event\":\"mouseup\",\"x\":10,\"y\":20}"
-        );
-        assert_eq!(
-            Event::MouseWheel { x: 30, y: 40, delta_x: 0, delta_y: -120 }.to_json(),
-            "{\"event\":\"mousewheel\",\"x\":30,\"y\":40,\"deltaX\":0,\"deltaY\":-120}"
-        );
     }
 
     #[test]

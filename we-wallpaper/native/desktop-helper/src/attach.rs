@@ -359,19 +359,6 @@ fn with_physical_dpi<T>(f: impl FnOnce() -> T) -> T {
     }
 }
 
-/// Re-asserts per-monitor-v2 DPI awareness for the calling thread *without* restoring it: the
-/// message-loop thread reads cursor positions for the mouse reports (mouse_forward.rs) and must
-/// keep reporting physical pixels for the process lifetime. The process-level switch happens in
-/// main.rs before any window exists; this only covers the platform refusing that call.
-pub(crate) fn ensure_thread_dpi_awareness() {
-    use windows::Win32::UI::HiDpi::{
-        SetThreadDpiAwarenessContext, DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2,
-    };
-    unsafe {
-        SetThreadDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
-    }
-}
-
 /// Sizes the window to fill the monitor it currently sits on, expressed in WorkerW client
 /// coordinates (the classic WorkerW spans the whole virtual screen, so the client origin can
 /// be offset — Seelen handlers.rs does the same conversion from the virtual screen rect).

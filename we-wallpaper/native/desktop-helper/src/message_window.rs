@@ -2,7 +2,7 @@
 // Hidden top-level message window of the resident helper. It is a real (never shown) window
 // rather than an HWND_MESSAGE message-only window because broadcast messages — most importantly
 // TaskbarCreated after an explorer restart — are not delivered to message-only windows.
-// WM_INPUT (raw mouse), WM_TIMER (heartbeat) and WM_CLOSE (detach request) are routed from here.
+// WM_TIMER (heartbeat) and WM_CLOSE (detach request) are routed from here.
 
 use std::sync::atomic::{AtomicIsize, AtomicU32, Ordering};
 
@@ -12,16 +12,14 @@ use windows::Win32::System::LibraryLoader::GetModuleHandleW;
 use windows::Win32::UI::WindowsAndMessaging::{
     CreateWindowExA, DefWindowProcA, DispatchMessageW, GetMessageW, PostQuitMessage,
     RegisterClassA, RegisterWindowMessageW, TranslateMessage, DestroyWindow, MSG, WINDOW_STYLE,
-    WNDCLASSA, WM_CLOSE, WM_DESTROY, WM_INPUT, WM_TIMER,
+    WNDCLASSA, WM_CLOSE, WM_DESTROY, WM_TIMER,
 };
 
 static MESSAGE_HWND: AtomicIsize = AtomicIsize::new(0);
 static TASKBAR_CREATED_MSG: AtomicU32 = AtomicU32::new(0);
 
-// Timer ids dispatched to their owners in window_proc. 1 = heartbeat (monitor.rs), 2 = the
-// trailing flush for held-back mouse moves (mouse_forward.rs).
+// Timer id dispatched to monitor.rs in window_proc.
 pub const HEARTBEAT_TIMER_ID: usize = 1;
-pub const MOUSE_MOVE_TIMER_ID: usize = 2;
 
 pub fn hwnd() -> Option<HWND> {
     let value = MESSAGE_HWND.load(Ordering::Relaxed);
@@ -68,19 +66,6 @@ pub unsafe fn create() -> Result<(), String> {
     Ok(())
 }
 
-/// Starts a Win32 timer on the message window; WM_TIMER arrives in window_proc with the id.
-/// Returns the new timer id (0 on failure).
-pub unsafe fn set_timer(timer_id: usize, interval_ms: u32) -> usize {
-    unsafe {
-        windows::Win32::UI::WindowsAndMessaging::SetTimer(
-            hwnd(),
-            timer_id,
-            interval_ms,
-            None,
-        )
-    }
-}
-
 /// Blocks pumping messages until PostQuitMessage (WM_CLOSE / detach).
 pub unsafe fn run_message_loop() {
     let mut msg = MSG::default();
@@ -97,13 +82,9 @@ unsafe extern "system" fn window_proc(
     l_param: LPARAM,
 ) -> LRESULT {
     match msg {
-        WM_INPUT => {
-            crate::mouse_forward::handle_raw_input(l_param);
-        }
         WM_TIMER => {
             match w_param.0 {
                 HEARTBEAT_TIMER_ID => crate::monitor::on_timer(),
-                MOUSE_MOVE_TIMER_ID => crate::mouse_forward::on_move_timer(),
                 _ => {}
             }
         }

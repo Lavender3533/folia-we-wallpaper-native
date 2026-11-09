@@ -1,7 +1,7 @@
 // packaging/windows/wallpaper-helper/src/cli.rs
 // Pure command-line parsing for the wallpaper helper. No Win32 imports, so the unit tests at the
 // bottom of this file run on any host OS (see `cargo test`) — the Windows-dependent code paths
-// live in attach.rs / monitor.rs / mouse_forward.rs and are cfg-gated to Windows.
+// live in attach.rs / monitor.rs and are cfg-gated to Windows.
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Command {
@@ -9,7 +9,6 @@ pub enum Command {
     /// (heartbeat, z-order guard, explorer restarts) until a `detach` line arrives on stdin.
     Attach {
         hwnd: isize,
-        forward_mouse: bool,
         zguard: bool,
     },
     /// One-shot: re-assert the window geometry to fill the monitor it currently sits on
@@ -28,7 +27,7 @@ fn parse_isize(value: &str) -> Result<isize, String> {
         .map_err(|_| format!("invalid integer value: {value}"))
 }
 
-const KNOWN_OPTIONS: &[&str] = &["--hwnd", "--forward-mouse", "--zguard"];
+const KNOWN_OPTIONS: &[&str] = &["--hwnd", "--zguard"];
 
 /// Parses `args` (already stripped of argv[0] and the command name is expected first).
 pub fn parse(args: &[String]) -> Result<Command, String> {
@@ -87,7 +86,6 @@ pub fn parse(args: &[String]) -> Result<Command, String> {
     match command.as_str() {
         "attach" => Ok(Command::Attach {
             hwnd: take_hwnd()?,
-            forward_mouse: take_flag("--forward-mouse", false)?,
             zguard: take_flag("--zguard", false)?,
         }),
         "move" => Ok(Command::Move { hwnd: take_hwnd()? }),
@@ -112,12 +110,11 @@ mod tests {
 
     #[test]
     fn parses_attach_with_flags() {
-        let command = parse(&args(&["attach", "--hwnd", "12345", "--forward-mouse", "--zguard"])).unwrap();
+        let command = parse(&args(&["attach", "--hwnd", "12345", "--zguard"])).unwrap();
         assert_eq!(
             command,
             Command::Attach {
                 hwnd: 12345,
-                forward_mouse: true,
                 zguard: true,
             }
         );
@@ -130,7 +127,6 @@ mod tests {
             command,
             Command::Attach {
                 hwnd: 42,
-                forward_mouse: false,
                 zguard: false,
             }
         );
@@ -138,12 +134,11 @@ mod tests {
 
     #[test]
     fn attach_accepts_explicit_false() {
-        let command = parse(&args(&["attach", "--hwnd=42", "--forward-mouse=false"])).unwrap();
+        let command = parse(&args(&["attach", "--hwnd=42", "--zguard=false"])).unwrap();
         assert_eq!(
             command,
             Command::Attach {
                 hwnd: 42,
-                forward_mouse: false,
                 zguard: false,
             }
         );

@@ -60,13 +60,6 @@ function createWindowsWallpaperController(options = {}) {
     // (mode) => void for the desktop architecture reported by `attached` events
     // ('classic' = Win10/early Win11 WorkerW sibling, 'raised' = Win11 24H2+ Progman child).
     onAttachMode,
-    // (event) => void for helper mouse events (mousemove/mousedown/mouseup in *physical* screen
-    // pixels — the helper is per-monitor DPI aware; the consumer converts them with
-    // screen.screenToDipPoint, see windowsWallpaperMouse.cjs). The main process injects these into
-    // the renderer via webContents.sendInputEvent — posted WM_MOUSEMOVE cannot be used because
-    // Chromium's TrackMouseEvent tears the hover state back down between every forwarded move
-    // (the real cursor sits above us on the desktop icon layer).
-    onMouseInput,
   } = options;
 
   let helperProcess = null;
@@ -229,14 +222,6 @@ function createWindowsWallpaperController(options = {}) {
         break;
       case 'heartbeat':
         break;
-      // Mouse reports are high frequency but never fatal; they double as liveness evidence
-      // because handleHelperEvent refreshes lastEventAt before this switch.
-      case 'mousemove':
-      case 'mousedown':
-      case 'mouseup':
-      case 'mousewheel':
-        onMouseInput?.(event);
-        break;
       // The helper re-attaches on its own; these are informational unless it reports an error.
       case 'workerw-destroyed':
       case 'explorer-restarted':
@@ -266,15 +251,12 @@ function createWindowsWallpaperController(options = {}) {
     }
   }
 
-  function spawnHelper(helperPath, { forwardMouse, zguard }) {
+  function spawnHelper(helperPath, { zguard }) {
     const hwnd = getHwnd();
     if (hwnd === null || hwnd === undefined) {
       return 'no-window';
     }
     const args = ['attach', '--hwnd', String(hwnd)];
-    if (forwardMouse) {
-      args.push('--forward-mouse');
-    }
     if (zguard) {
       args.push('--zguard');
     }
@@ -391,10 +373,8 @@ function createWindowsWallpaperController(options = {}) {
       logWarn('[WallpaperWin] helper binary missing, cannot enable wallpaper mode');
       return 'missing';
     }
-    // Defaults match the renderer settings: both toggles default to on.
-    const forwardMouse = store.get('wallpaper_forward_mouse') !== false;
     const zguard = store.get('wallpaper_zguard') !== false;
-    const result = spawnHelper(helperPath, { forwardMouse, zguard });
+    const result = spawnHelper(helperPath, { zguard });
     if (result === 'spawned') {
       // Recovery from repeated failures starts optimistic; the failure counter only grows when
       // a session dies young, so also schedule the healthy reset from here.

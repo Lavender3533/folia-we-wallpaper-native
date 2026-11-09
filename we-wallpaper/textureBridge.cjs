@@ -5,7 +5,7 @@ const { ipcMain, session, sharedTexture, screen, BrowserWindow } = require('elec
 
 // Only texture metadata crosses JS IPC; pixels stay in GPU resources.
 const PREFIX = 'folia-we-native:';
-const VERSION = '0.3.0';
+const VERSION = '0.3.3';
 
 function installTextureBridge({ getMainWindow, onRequest, onDetach, onPointer, onError }) {
     const targets = new Map();

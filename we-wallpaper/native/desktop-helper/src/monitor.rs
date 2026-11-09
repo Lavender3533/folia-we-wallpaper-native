@@ -275,9 +275,6 @@ fn spawn_reattach() {
                         workerw: worker_w.0 as isize,
                         mode: mode.as_str(),
                     });
-                    // Keep mouse reporting pointed at the (possibly new) WorkerW for the
-                    // foreground filter.
-                    let _ = crate::mouse_forward::register(worker_w);
                     break;
                 }
                 Err(err) => {

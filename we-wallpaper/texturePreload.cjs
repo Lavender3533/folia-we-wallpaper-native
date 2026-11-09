@@ -5,7 +5,7 @@ const { contextBridge, ipcRenderer, sharedTexture } = require('electron');
 // Draw inside the isolated world so a VideoFrame never crosses contextBridge.
 if (process.isMainFrame) {
     const prefix = 'folia-we-native:';
-    const version = '0.3.0';
+    const version = '0.3.3';
     const canvases = new Map();
 
     sharedTexture.setSharedTextureReceiver(async ({ importedSharedTexture }, consumerId) => {

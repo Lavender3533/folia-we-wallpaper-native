@@ -6,7 +6,7 @@ const { execFile } = require('child_process');
 const { promisify } = require('util');
 const { fileURLToPath } = require('url');
 const { createWindowsWallpaperController } = require('./desktop/controller.cjs');
-const { createWindowsWallpaperMouseInjector } = require('./desktop/mouse.cjs');
+const { createDesktopTray } = require('./desktop/tray.cjs');
 const { createWindowsWallpaperPresentation } = require('./desktop/presentation.cjs');
 
 // Own the desktop session entirely inside this mod; the installed Folia files stay untouched.
@@ -27,17 +27,16 @@ function createDesktopHost({ storage, desktop, publish, log }) {
     let disposed = false;
     let disposing = null;
     let bounds;
+    let tray;
     const values = new Map();
     const helper = path.join(__dirname, 'bin/folia-wallpaper-helper.exe');
     const getHwnd = () => {
         const win = mainWindow();
         return win && !win.isDestroyed() ? win.getNativeWindowHandle().readBigUInt64LE().toString() : null;
     };
-    const mouse = createWindowsWallpaperMouseInjector({ screen, getMainWindow: mainWindow });
     const controller = createWindowsWallpaperController({
         store: { get: key => key === 'wallpaper_mode' ? enabled : values.get(key), set: (key, value) => values.set(key, value) },
         helperPath: () => helper, getHwnd,
-        onMouseInput: event => { if (enabled) mouse.forward(event); },
         onDegrade: () => { void setEnabled(false).catch(error => log.error(error)); },
         onReattachNeeded: () => { void setEnabled(false).catch(error => log.error(error)); },
     });
@@ -68,10 +67,15 @@ function createDesktopHost({ storage, desktop, publish, log }) {
     const setEnabled = next => {
         const operation = pending.then(async () => {
             if (disposed || enabled === next) return { enabled };
-            if (next) await desktop.remember();
+            if (next) {
+                await desktop.remember();
+                const locale = await mainWindow().webContents.executeJavaScript('document.documentElement.lang');
+                tray ??= createDesktopTray(() => { void setEnabled(false).catch(error => log.error(error)); }, locale);
+            }
             else await desktop.restore();
             enabled = next;
             await presenter.setEnabled(next);
+            if (!next) { tray?.destroy(); tray = null; }
             await storage.set('desktop-enabled', next);
             resume = next;
             return { enabled };
@@ -89,7 +93,7 @@ function createDesktopHost({ storage, desktop, publish, log }) {
                     try { await desktop.restore(); }
                     finally { await presenter.setEnabled(false); }
                 }
-            } finally { controller.killHelper(); }
+            } finally { controller.killHelper(); tray?.destroy(); tray = null; }
         });
         return disposing;
     }

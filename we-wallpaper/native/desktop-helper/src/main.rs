@@ -1,7 +1,7 @@
 // packaging/windows/wallpaper-helper/src/main.rs
 // Folia Windows desktop-wallpaper helper: parents the Electron main window into the WorkerW
-// layer below the desktop icons, forwards desktop mouse input (move + left button) via Raw
-// Input, and keeps the session alive across explorer restarts. Protocol: JSONL events on
+// layer below the desktop icons and keeps the session alive across explorer restarts.
+// It does not read mouse or keyboard input. Protocol: JSONL events on
 // stdout, one-line commands on stdin (`detach`), consumed by
 // electron/wallpaper/windowsWallpaperController.cjs. Implementation provenance per module is noted in
 // each file header; overall licensing is AGPL-3.0 (same as Folia).
@@ -15,8 +15,6 @@ mod attach;
 mod message_window;
 #[cfg(windows)]
 mod monitor;
-#[cfg(windows)]
-mod mouse_forward;
 
 use cli::Command;
 use events::Event;
@@ -26,7 +24,7 @@ fn main() {
     match cli::parse(&args) {
         Ok(command) => run(command),
         Err(message) => {
-            eprintln!("usage: folia-wallpaper-helper attach --hwnd <n> [--forward-mouse] [--zguard]");
+            eprintln!("usage: folia-wallpaper-helper attach --hwnd <n> [--zguard]");
             eprintln!("       folia-wallpaper-helper move --hwnd <n>");
             eprintln!("       folia-wallpaper-helper detach --hwnd <n>");
             eprintln!("       folia-wallpaper-helper refresh");
@@ -87,10 +85,9 @@ fn run_windows(command: Command) {
             }
             Command::Attach {
                 hwnd,
-                forward_mouse,
                 zguard,
             } => {
-                attach_resident(hwnd, forward_mouse, zguard);
+                attach_resident(hwnd, zguard);
             }
         }
     }
@@ -114,10 +111,10 @@ unsafe fn detach_and_report(hwnd: isize) {
     }
 }
 
-/// Resident attach: mount into WorkerW, install monitoring (+ optional mouse forwarding),
+/// Resident attach: mount into WorkerW, install monitoring,
 /// pump messages until a `detach` line arrives on stdin.
 #[cfg(windows)]
-unsafe fn attach_resident(hwnd: isize, forward_mouse: bool, zguard: bool) {
+unsafe fn attach_resident(hwnd: isize, zguard: bool) {
     if let Err(err) = message_window::create() {
         events::emit(&Event::Error { message: err, kind: None });
         std::process::exit(1);
@@ -136,21 +133,6 @@ unsafe fn attach_resident(hwnd: isize, forward_mouse: bool, zguard: bool) {
         events::emit(&Event::Error { message: err, kind: None });
         std::process::exit(1);
     }
-    if forward_mouse {
-        // Fatal, by contract with the main process (a pre-`attached` error counts as a failed
-        // session): the wallpaper window sits below the icon layer and never receives real OS
-        // input, and keyboard is not forwarded either — without mouse reporting the page is
-        // unreachable, so staying resident would leave an uninteractable desktop. Exiting lets
-        // the main process' crash-loop breaker degrade wallpaper mode instead.
-        if let Err(err) = mouse_forward::register(worker_w) {
-            events::emit(&Event::Error {
-                message: format!("mouse forwarding unavailable: {err}"),
-                kind: None,
-            });
-            std::process::exit(1);
-        }
-    }
-
     events::emit(&Event::Attached {
         hwnd: hwnd.0 as isize,
         workerw: worker_w.0 as isize,
