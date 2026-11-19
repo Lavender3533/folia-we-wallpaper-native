@@ -276,7 +276,7 @@ export function mountBackground(folium, container, ctx) {
         if (surface.owner === owner) {
             surface.owner = null;
             const release = () => {
-                if (!surface.owner) { stopSurface(surface); ctx.onNativeStopped?.(); }
+                if (!surface.owner) { stopSurface(surface, true); ctx.onNativeStopped?.(); }
             };
             if (!isBackgroundSelected(folium) || layer.hasAttribute('inert')) release();
             else surface.releaseTimer = setTimeout(release, 250);
