@@ -47,7 +47,7 @@ export function mountDesktopInput(folium, ctx, navigation) {
             observedPopups = popups;
             if (active && navigation.hitRegion) {
                 const rect = navigation.hitRegion;
-                rects.push({ left:Math.max(0,rect.left - 32), top:Math.max(0,rect.top - 32), width:rect.width + 64, height:rect.height + 64 });
+                rects.push({ left:Math.max(0,rect.left - rect.revealPadding), top:Math.max(0,rect.top - rect.revealPadding), width:rect.width + rect.revealPadding * 2, height:rect.height + rect.revealPadding * 2 });
             }
             const key = JSON.stringify(rects);
             if(key === signature) return;

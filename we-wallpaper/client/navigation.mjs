@@ -125,6 +125,7 @@ export function mountNavigation(folium, container, ctx, navigation) {
     const style = document.createElement('style');
     style.textContent = '.we-navigation{position:absolute;right:24px;bottom:108px;display:flex;align-items:center;gap:8px;min-height:40px;padding:8px 16px;border:0;border-radius:20px;background:rgba(0,0,0,.2);color:rgba(255,255,255,.6);backdrop-filter:blur(12px);font:13px "Segoe UI","Microsoft YaHei UI",sans-serif;cursor:pointer;opacity:0;pointer-events:none;transition:opacity .2s ease-out,transform .2s ease-out,background-color .15s ease}.we-navigation:hover{background:rgba(255,255,255,.1)}.we-navigation:focus-visible{outline:2px solid currentColor;outline-offset:3px}.we-navigation:disabled{cursor:wait}';
     const button = document.createElement('button');
+    style.textContent += '.we-navigation{box-sizing:border-box}.we-navigation span{white-space:nowrap}.we-navigation[data-compact="true"]{padding:8px;gap:0}.we-navigation[data-compact="true"] span{position:absolute;visibility:hidden;width:max-content}';
     button.type = 'button';
     button.className = 'we-navigation';
     const caption = document.createElement('span');
@@ -139,9 +140,13 @@ export function mountNavigation(folium, container, ctx, navigation) {
     const render = () => {
         const display = ctx.getDisplay();
         caption.textContent = navigation.desktop ? t('chooseSong') : t('returnDesktop');
+        button.setAttribute('aria-label', caption.textContent);
         const viewportHeight = navigation.desktop ? innerHeight * Math.min(1, screen.availHeight / screen.height) : innerHeight;
-        position = placeNavigation({ width:innerWidth, height:viewportHeight }, { width:button.offsetWidth, height:button.offsetHeight }, ctx.getLayout());
+        position = placeNavigation({ width:innerWidth, height:viewportHeight }, { width:caption.offsetWidth + 56, height:button.offsetHeight }, ctx.getLayout());
+        button.dataset.compact = String(Boolean(position?.compact));
+        button.title = position?.compact ? caption.textContent : '';
         if (position) {
+            button.style.width = position.width + 'px';
             button.style.right = 'auto'; button.style.bottom = 'auto';
             button.style.left = position.left + 'px'; button.style.top = position.top + 'px';
         }
@@ -162,8 +167,8 @@ export function mountNavigation(folium, container, ctx, navigation) {
         nearby = next;
         render();
     };
-    const move = event => reveal(Boolean(position && event.clientX >= position.left - 32 && event.clientX <= position.left + position.width + 32
-        && event.clientY >= position.top - 32 && event.clientY <= position.top + position.height + 32));
+    const move = event => reveal(Boolean(position && event.clientX >= position.left - position.revealPadding && event.clientX <= position.left + position.width + position.revealPadding
+        && event.clientY >= position.top - position.revealPadding && event.clientY <= position.top + position.height + position.revealPadding));
     const leave = () => { clearTimeout(touchTimer); reveal(false); };
     const touch = event => {
         if (event.pointerType !== 'touch') return;
