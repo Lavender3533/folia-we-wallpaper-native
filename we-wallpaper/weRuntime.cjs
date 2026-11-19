@@ -105,7 +105,7 @@ class WeRuntime {
             if (this.active?.signature === signature && this.capture) {
                 this.active.consumerId = params.consumerId;
                 this.active.viewport = params.viewport;
-                this.placeSource(viewport);
+                await this.placeSource(viewport);
                 return this.status();
             }
             await this.closeActive();
@@ -176,7 +176,7 @@ class WeRuntime {
                 return this.status();
             }
             // WGC must acquire the window before it is removed from the taskbar.
-            this.placeSource(viewport);
+            await this.placeSource(viewport);
             return this.status();
         }).catch(async error => {
             if (epoch === this.epoch) {
@@ -189,12 +189,13 @@ class WeRuntime {
         });
     }
 
-    placeSource(bounds) {
+    async placeSource(bounds) {
+        const active = this.active;
         const position = this.bridge.sourcePosition();
         const geometry = [position.x, position.y, bounds.width, bounds.height].join(',');
-        if (this.active.geometry === geometry) return;
-        this.native.placeWindow(this.active.hwnd, position.x, position.y, bounds.width, bounds.height);
-        this.active.geometry = geometry;
+        if (active.geometry === geometry) return;
+        await this.native.placeWindow(active.hwnd, position.x, position.y, bounds.width, bounds.height);
+        if (this.active === active) active.geometry = geometry;
     }
 
     unbindOwner() {
@@ -237,8 +238,10 @@ class WeRuntime {
             }
         };
         const move = () => {
-            if (!this.active?.hwnd || this.hidden) return;
-            this.placeSource(this.bridge.viewport(this.active.consumerId));
+            void this.enqueue(async () => {
+                if (!this.active?.hwnd || this.hidden) return;
+                await this.placeSource(this.bridge.viewport(this.active.consumerId));
+            }).catch(error => this.log.warn('[WE wallpaper]', error));
         };
         for (const name of ['minimize', 'restore', 'hide', 'show']) {
             owner.on(name, visibility);

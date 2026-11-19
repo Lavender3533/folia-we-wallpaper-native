@@ -1,11 +1,17 @@
 use napi::{Error, Result};
 use windows::core::BOOL;
-use windows::Win32::Foundation::{HWND, LPARAM, WPARAM};
+use windows::Win32::Foundation::{HWND, LPARAM, POINT, WPARAM};
+use windows::Win32::Graphics::Gdi::ClientToScreen;
 use windows::Win32::UI::Controls::WM_MOUSELEAVE;
 use windows::Win32::UI::HiDpi::{SetThreadDpiAwarenessContext, DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2};
 use windows::Win32::UI::WindowsAndMessaging::*;
 use windows::Win32::UI::Shell::{ITaskbarList, TaskbarList};
-use windows::Win32::System::Com::{CoCreateInstance, CLSCTX_INPROC_SERVER};
+use windows::Win32::System::Com::{CoCreateInstance, CoInitializeEx, CoUninitialize, CLSCTX_INPROC_SERVER, COINIT_MULTITHREADED};
+
+struct Apartment;
+impl Drop for Apartment {
+    fn drop(&mut self) { unsafe { CoUninitialize(); } }
+}
 
 // The WE window stays visible to WGC, underneath the desktop, without activation.
 pub fn parse_hwnd(value: &str) -> Result<*mut std::ffi::c_void> {
@@ -32,6 +38,8 @@ pub fn find_window(title: &str) -> Option<*mut std::ffi::c_void> {
 
 pub fn place_window(raw: *mut std::ffi::c_void, x: i32, y: i32, width: i32, height: i32) -> windows::core::Result<()> {
     unsafe {
+        CoInitializeEx(None, COINIT_MULTITHREADED).ok()?;
+        let _apartment = Apartment;
         let previous = SetThreadDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
         let hwnd = HWND(raw);
         let style = GetWindowLongPtrW(hwnd, GWL_STYLE) as u32;
@@ -57,7 +65,9 @@ pub fn pointer(raw: *mut std::ffi::c_void, kind: &str, x: i32, y: i32, buttons: 
         "leave" => WM_MOUSELEAVE,
         _ => WM_MOUSEMOVE,
     };
-    let coordinates = LPARAM(((y as u16 as u32) << 16 | x as u16 as u32) as isize);
+    let mut point = POINT { x, y };
+    if kind == "wheel" { unsafe { ClientToScreen(HWND(raw), &mut point).ok()?; } }
+    let coordinates = LPARAM(((point.y as u16 as u32) << 16 | point.x as u16 as u32) as isize);
     let flags = if buttons & 1 != 0 { 1 } else { 0 };
     let parameter = if kind == "wheel" { ((delta as u16 as usize) << 16) | flags } else { flags };
     unsafe { PostMessageW(Some(HWND(raw)), message, WPARAM(parameter), coordinates) }

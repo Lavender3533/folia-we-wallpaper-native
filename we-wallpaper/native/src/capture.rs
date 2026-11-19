@@ -118,7 +118,7 @@ impl Gpu {
 }
 
 pub fn run(hwnd: usize, fps: u32, vendor: u32, device_id: u32, sender: Sender<Command>, receiver: Receiver<Command>,
-    started: &SyncSender<Result<(), String>>, callback: &FrameCallback) -> windows::core::Result<()> {
+    started: &mut Option<SyncSender<Result<(), String>>>, callback: &FrameCallback) -> windows::core::Result<()> {
     unsafe { CoInitializeEx(None, COINIT_MULTITHREADED).ok()?; }
     let _apartment = Apartment;
     let mut gpu = Gpu::new(vendor, device_id)?;
@@ -139,7 +139,8 @@ pub fn run(hwnd: usize, fps: u32, vendor: u32, device_id: u32, sender: Sender<Co
     }))?;
     let close_token = item.Closed(&TypedEventHandler::new(move |_, _| { let _ = sender.send(Command::SourceClosed); Ok(()) }))?;
     session.StartCapture()?;
-    let _ = started.send(Ok(()));
+    // Consuming the startup sender makes every later failure a runtime callback.
+    if let Some(started) = started.take() { let _ = started.send(Ok(())); }
     let mut slots: Vec<Slot> = Vec::new();
     let interval = Duration::from_secs_f64(1.0 / fps.max(1) as f64);
     let mut next_frame = Instant::now();
