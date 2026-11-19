@@ -1,6 +1,6 @@
 import { translator } from './labels.mjs';
 import { NATIVE_VERSION, isMainContext, callHost } from './support.mjs';
-import { placeNavigation } from './navigationLayout.mjs';
+import { observeNavigationAnchor } from './navigationLayout.mjs';
 
 // Desktop attachment and remembered window bounds belong to the mod main entry.
 export function createDesktopNavigation(folium) {
@@ -126,7 +126,7 @@ export function mountNavigation(folium, container, ctx, navigation) {
     style.textContent =
         '.we-navigation{position:absolute;box-sizing:border-box;width:48px;height:48px;padding:0;display:flex;align-items:center;justify-content:center;border:0;border-radius:50%;background:rgba(0,0,0,.4);color:#fff;backdrop-filter:blur(12px);box-shadow:0 10px 15px -3px rgba(0,0,0,.1),0 4px 6px -4px rgba(0,0,0,.1);font:12px "Segoe UI","Microsoft YaHei UI",sans-serif;cursor:pointer;opacity:0;transition:opacity .2s ease-out,background-color .15s ease}' +
         '.we-navigation{transition:opacity .2s ease-out,background-color .15s ease,transform .3s ease}.we-navigation[data-daylight=true]{background:rgba(255,255,255,.7);color:#18181b}.we-navigation:hover{background:rgba(0,0,0,.55)}.we-navigation[data-daylight=true]:hover{background:rgba(255,255,255,.85)}' +
-        '.we-navigation:focus-visible{outline:2px solid currentColor;outline-offset:3px}.we-navigation:disabled{cursor:wait}.we-navigation svg{width:20px;height:20px;transition:transform .15s ease}.we-navigation:active svg{transform:scale(.9)}' +
+        '.we-navigation:focus-visible{outline:2px solid currentColor;outline-offset:3px}.we-navigation:disabled{cursor:wait}.we-navigation svg{width:var(--we-navigation-icon-size,20px);height:var(--we-navigation-icon-size,20px);transition:transform .15s ease}.we-navigation:active svg{transform:scale(.9)}' +
         '.we-navigation[data-desktop=true] [data-icon=monitor],.we-navigation[data-desktop=false] [data-icon=list-music]{display:none}' +
         '.we-navigation-label{position:absolute;right:calc(100% + 12px);top:50%;padding:6px 10px;border-radius:8px;white-space:nowrap;line-height:1.5;color:inherit;background:inherit;backdrop-filter:blur(12px);pointer-events:none;opacity:0;visibility:hidden;transform:translate(4px,-50%);transition:opacity .15s ease,transform .15s ease,visibility .15s}' +
         '.we-navigation:hover .we-navigation-label,.we-navigation:focus-visible .we-navigation-label{opacity:1;visibility:visible;transform:translate(0,-50%)}' +
@@ -152,29 +152,22 @@ export function mountNavigation(folium, container, ctx, navigation) {
         });
     }
     let position = null;
-    let panelMotion = null;
-    const panelMotionChanged = new MutationObserver(() => render());
+    const nativeAnchor = observeNavigationAnchor(() => render());
     const render = () => {
         const display = ctx.getDisplay();
         caption.textContent = navigation.desktop ? t('chooseSong') : t('returnDesktop');
         button.setAttribute('aria-label', caption.textContent);
         button.dataset.desktop = String(navigation.desktop);
         button.dataset.daylight = String(ctx.getTheme().isDaylight);
-        position = placeNavigation({ width:innerWidth, height:innerHeight }, ctx.getLayout());
-        button.style.left = position.left + 'px';
-        button.style.top = position.top + 'px';
-        const narrow = innerWidth < 768;
-        const nativeMotion = narrow ? document.querySelector('[data-testid="panel-toggle"] > div') : null;
-        if (nativeMotion !== panelMotion) {
-            panelMotionChanged.disconnect();
-            panelMotion = nativeMotion;
-            if (panelMotion) panelMotionChanged.observe(panelMotion, { attributes:true, attributeFilter:['class'] });
+        position = nativeAnchor.get();
+        if (position) {
+            button.style.left = position.left + 'px'; button.style.top = position.top + 'px';
+            button.style.width = position.width + 'px'; button.style.height = position.height + 'px';
+            button.style.backgroundColor = position.background; button.style.color = position.color; button.style.boxShadow = position.shadow;
+            button.style.setProperty('--we-navigation-icon-size', (position.width === 40 ? 18 : 20) + 'px');
         }
-        const tucked = panelMotion?.classList.contains('translate-x-1/2') && !panelMotion.parentElement.matches(':hover');
-        button.style.transform = tucked ? 'translateX(24px)' : 'translateX(0)';
-        const unavailable = display.isPlayerChromeHidden || display.isPanelOpen || display.visualizerOpacity === 0 || position.top < 0;
-        // Include the native narrow-window slide so input stays aligned throughout its transition.
-        navigation.setHitRegion(unavailable ? null : { ...position, width:position.width + (narrow ? 24 : 0) });
+        const unavailable = !position || position.blocked || display.isPlayerChromeHidden || display.isPanelOpen || display.visualizerOpacity === 0 || position.top < 0;
+        navigation.setHitRegion(unavailable ? null : position);
         button.disabled = navigation.busy || unavailable;
         button.style.opacity = String(unavailable ? 0 : display.visualizerOpacity * (navigation.busy ? 0.4 : nearby || keyboardFocused ? 1 : 0.6));
         button.style.pointerEvents = unavailable ? 'none' : 'auto';
@@ -182,7 +175,8 @@ export function mountNavigation(folium, container, ctx, navigation) {
         button.tabIndex = unavailable ? -1 : 0;
     };
     const off = navigation.subscribe(render);
-    const offDisplay = ctx.onChange(render);
+    const offDisplay = ctx.onChange(() => { nativeAnchor.refresh(); render(); });
+    const offView = folium.events.on('app.viewChanged', () => nativeAnchor.refresh());
     const reveal = next => {
         if (nearby === next) return;
         nearby = next;
@@ -218,8 +212,8 @@ export function mountNavigation(folium, container, ctx, navigation) {
     };
     return () => {
         disposed = true;
-        off(); offDisplay();
-        panelMotionChanged.disconnect();
+        off(); offDisplay(); offView();
+        nativeAnchor.dispose();
         navigation.setHitRegion(null);
         clearTimeout(touchTimer);
         window.removeEventListener('mousemove', move, true);
