@@ -3,14 +3,13 @@ import { NATIVE_VERSION, isMainContext, isBackgroundSelected, liveBackgroundLaye
 
 const liveSurfaces = new WeakMap();
 
-function stopSurface(surface) {
+function stopSurface(surface, clear = false) {
     ++surface.epoch;
     if (surface.attached || surface.attaching) surface.native?.detachCanvas(surface.id);
     surface.attached = false;
     surface.ready = false;
     surface.requestKey = '';
-    surface.canvas.width = 1;
-    surface.canvas.height = 1;
+    if (clear) { surface.canvas.width = 1; surface.canvas.height = 1; }
 }
 
 function liveSurface(folium) {
@@ -28,7 +27,7 @@ function liveSurface(folium) {
     folium.onDispose(() => {
         surface.ended = true;
         clearTimeout(surface.releaseTimer);
-        stopSurface(surface);
+        stopSurface(surface, true);
         surface.owner = null;
         liveSurfaces.delete(folium);
     });
@@ -71,7 +70,7 @@ export function mountBackground(folium, container, ctx) {
     root.append(message);
     container.append(root);
     const layer = liveBackgroundLayer(folium, container);
-    if (!layer || layer.hasAttribute('inert')) return mountPreview(folium, root, ctx, message);
+    if (!layer) return mountPreview(folium, root, ctx, message);
 
     const surface = liveSurface(folium);
     const canvas = surface.canvas;
@@ -88,6 +87,7 @@ export function mountBackground(folium, container, ctx) {
     let starting = false;
     let requested = false;
     let timer;
+    let recoveryAttempted = false;
     let lastGeometry = '';
     let viewport;
     const error = value => { if (!disposed) message.textContent = value.message || String(value); };
@@ -98,16 +98,36 @@ export function mountBackground(folium, container, ctx) {
         stopSurface(surface);
         ctx.onNativeStopped?.();
     };
+    const drawn = event => {
+        if (!owner.active() || !surface.attached) return;
+        surface.frameWidth = event.detail.width;
+        surface.frameHeight = event.detail.height;
+        surface.ready = true;
+        recoveryAttempted = false;
+        message.textContent = '';
+        ctx.onNativeReady?.();
+    };
+    canvas.addEventListener('we-native-frame', drawn);
     const status = state => {
         if (!owner.active() || !surface.attached) return;
         if (state.phase === 'streaming') {
-            message.textContent = '';
+            if (surface.ready) message.textContent = '';
             surface.frameWidth = state.width;
             surface.frameHeight = state.height;
-            surface.ready = true;
-            ctx.onNativeReady?.();
-        } else if (state.phase === 'opening') message.textContent = t('opening');
-        else if (state.phase === 'error') message.textContent = state.message;
+            if (surface.ready) ctx.onNativeReady?.();
+        } else if (state.phase === 'opening') { native.expectFrame(consumerId); message.textContent = t('opening'); }
+        else if (state.phase === 'error' || state.phase === 'idle' || state.phase === 'paused') {
+            surface.requestKey = '';
+            surface.ready = false;
+            native.expectFrame(consumerId);
+            message.textContent = state.phase === 'error' ? state.message : state.phase === 'paused' ? t('paused') : '';
+            ctx.onNativeStopped?.();
+            if (state.phase === 'error' && !recoveryAttempted) {
+                recoveryAttempted = true;
+                clearTimeout(timer);
+                timer = setTimeout(start, 800);
+            }
+        }
     };
     const stopStatus = folium.rpc.on('native-status', status);
 
@@ -163,6 +183,17 @@ export function mountBackground(folium, container, ctx) {
         clearTimeout(timer);
         timer = setTimeout(start, 180);
     };
+    const recover = () => {
+        if (document.hidden || !owner.active()) return;
+        void callHost('status').then(state => {
+            if (!owner.active()) return;
+            status(state);
+            if (state.phase === 'error' || state.phase === 'idle' || state.phase === 'paused') {
+                surface.requestKey = '';
+                schedule();
+            }
+        }).catch(error);
+    };
     const geometry = () => {
         const rect = container.getBoundingClientRect();
         const next = { left: rect.left, top: rect.top, width: rect.width, height: rect.height, innerWidth: window.innerWidth };
@@ -194,6 +225,9 @@ export function mountBackground(folium, container, ctx) {
     });
     window.addEventListener('resize', geometry);
     window.addEventListener('storage', selectionChanged);
+    document.addEventListener('visibilitychange', recover);
+    window.addEventListener('focus', recover);
+    canvas.addEventListener('contextrestored', recover);
     if (native?.version !== NATIVE_VERSION) message.textContent = t('reloadHint');
     else {
         if (!surface.ready) message.textContent = t('opening');
@@ -231,6 +265,10 @@ export function mountBackground(folium, container, ctx) {
         disposed = true;
         clearTimeout(timer);
         observer.disconnect();
+        canvas.removeEventListener('we-native-frame', drawn);
+        canvas.removeEventListener('contextrestored', recover);
+        document.removeEventListener('visibilitychange', recover);
+        window.removeEventListener('focus', recover);
         stopResize(); stopChange(); stopSelection(); stopStatus(); stopSelectionCheck();
         window.removeEventListener('resize', geometry);
         window.removeEventListener('storage', selectionChanged);

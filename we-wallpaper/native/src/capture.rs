@@ -2,7 +2,7 @@ use super::{Command, FrameCallback, FramePacket};
 use napi::bindgen_prelude::Buffer;
 use napi::threadsafe_function::ThreadsafeFunctionCallMode;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{mpsc::{Receiver, Sender, SyncSender}, Arc};
+use std::sync::{mpsc::{Receiver, RecvTimeoutError, Sender, SyncSender}, Arc};
 use std::time::{Duration, Instant};
 use windows::core::{factory, Interface, PCWSTR};
 use windows::Foundation::TypedEventHandler;
@@ -18,6 +18,7 @@ use windows::Win32::System::Com::{CoInitializeEx, CoUninitialize, COINIT_MULTITH
 use windows::Win32::System::Threading::{CreateEventW, WaitForSingleObject};
 use windows::Win32::System::WinRT::Direct3D11::{CreateDirect3D11DeviceFromDXGIDevice, IDirect3DDxgiInterfaceAccess};
 use windows::Win32::System::WinRT::Graphics::Capture::IGraphicsCaptureItemInterop;
+use windows::Win32::UI::WindowsAndMessaging::IsWindow;
 
 // Three leased textures bound both GPU memory and in-flight renderer work.
 struct Slot {
@@ -144,7 +145,18 @@ pub fn run(hwnd: usize, fps: u32, vendor: u32, device_id: u32, sender: Sender<Co
     let mut next_frame = Instant::now();
     let mut lease = 0u32;
     let result = (|| -> windows::core::Result<()> {
-        while let Ok(command) = receiver.recv() {
+        loop {
+            let command = match receiver.recv_timeout(Duration::from_secs(1)) {
+                Ok(command) => command,
+                Err(RecvTimeoutError::Disconnected) => break,
+                Err(RecvTimeoutError::Timeout) => {
+                    // WGC may omit Closed after a pop-out is removed; inspect only our capture source.
+                    if !unsafe { IsWindow(Some(HWND(hwnd as *mut _))) }.as_bool() {
+                        return Err(windows::core::Error::new(windows::core::HRESULT(0x80000013u32 as i32), "Wallpaper Engine source window closed"));
+                    }
+                    continue;
+                }
+            };
             match command {
                 Command::Stop => break,
                 Command::SourceClosed => return Err(windows::core::Error::new(windows::core::HRESULT(0x80000013u32 as i32), "Wallpaper Engine source window closed")),

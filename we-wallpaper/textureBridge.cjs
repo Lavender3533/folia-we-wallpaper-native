@@ -5,7 +5,7 @@ const { ipcMain, session, sharedTexture, screen, BrowserWindow } = require('elec
 
 // Only texture metadata crosses JS IPC; pixels stay in GPU resources.
 const PREFIX = 'folia-we-native:';
-const VERSION = '0.3.5';
+const VERSION = '0.4.0';
 
 function installTextureBridge({ getMainWindow, onRequest, onDetach, onPointer, onError }) {
     const targets = new Map();
@@ -16,6 +16,7 @@ function installTextureBridge({ getMainWindow, onRequest, onDetach, onPointer, o
         if (typeof name !== 'string' || !Array.isArray(args)) throw new Error('Invalid WE request');
         return onRequest(name, args);
     });
+    ipcMain.handle(PREFIX + 'bootstrap', event => authorized(event));
     const preloadId = session.defaultSession.registerPreloadScript({
         type: 'frame', filePath: path.join(__dirname, 'texturePreload.cjs'),
     });
@@ -48,8 +49,12 @@ function installTextureBridge({ getMainWindow, onRequest, onDetach, onPointer, o
     const pointer = (event, data) => {
         if (authorized(event) && targets.get(data.consumerId)?.contents === event.sender) onPointer(data);
     };
+    const drawFailed = (event, consumerId, message) => {
+        if (authorized(event) && targets.get(consumerId)?.contents === event.sender) onError(new Error(String(message).slice(0, 500)));
+    };
     ipcMain.on(PREFIX + 'detach', detach);
     ipcMain.on(PREFIX + 'pointer', pointer);
+    ipcMain.on(PREFIX + 'draw-failed', drawFailed);
 
     return {
         version: VERSION,
@@ -74,7 +79,8 @@ function installTextureBridge({ getMainWindow, onRequest, onDetach, onPointer, o
         },
         async send(consumerId, capture, frame) {
             const target = targets.get(consumerId);
-            if (!target || target.contents.isDestroyed() || target.frame.detached || target.sending) {
+            const owner = target && !target.contents.isDestroyed() ? BrowserWindow.fromWebContents(target.contents) : null;
+            if (!target || target.contents.isDestroyed() || target.frame.detached || target.sending || !owner || owner.isMinimized() || !owner.isVisible()) {
                 capture.release(frame.frameId);
                 return;
             }
@@ -101,8 +107,10 @@ function installTextureBridge({ getMainWindow, onRequest, onDetach, onPointer, o
             session.defaultSession.unregisterPreloadScript(preloadId);
             ipcMain.removeHandler(PREFIX + 'attach');
             ipcMain.removeHandler(PREFIX + 'request');
+            ipcMain.removeHandler(PREFIX + 'bootstrap');
             ipcMain.removeListener(PREFIX + 'detach', detach);
             ipcMain.removeListener(PREFIX + 'pointer', pointer);
+            ipcMain.removeListener(PREFIX + 'draw-failed', drawFailed);
             for (const { contents, cleanup } of watched.values()) {
                 contents.removeListener('render-process-gone', cleanup);
                 contents.removeListener('destroyed', cleanup);

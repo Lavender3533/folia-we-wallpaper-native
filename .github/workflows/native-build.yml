@@ -1,0 +1,39 @@
+name: Build native artifacts
+on:
+  workflow_dispatch:
+  push:
+    tags: ['v*']
+permissions:
+  contents: read
+jobs:
+  windows-native:
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '24'
+      - name: Install pinned Rust toolchain
+        shell: pwsh
+        run: |
+          rustup toolchain install 1.99.1-x86_64-pc-windows-msvc --profile minimal
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          rustup default 1.99.1-x86_64-pc-windows-msvc
+      - name: Build from lockfiles
+        run: node we-wallpaper/native/build.mjs
+      - name: Record artifact hashes
+        shell: pwsh
+        run: |
+          $records = @('we-wallpaper/bin/folia-wallpaper-helper.exe', 'we-wallpaper/bin/we-capture-v2.win32-x64.node') | ForEach-Object {
+            $file = Get-Item -LiteralPath $_
+            @{ path = $_; bytes = $file.Length; sha256 = (Get-FileHash -LiteralPath $_ -Algorithm SHA256).Hash.ToLowerInvariant() }
+          }
+          @{ commit = $env:GITHUB_SHA; rustc = (rustc --version); node = (node --version); files = @($records) } | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath 'native-artifacts.json' -Encoding utf8NoBOM
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: native-win32-x64
+          if-no-files-found: error
+          path: |
+            we-wallpaper/bin/folia-wallpaper-helper.exe
+            we-wallpaper/bin/we-capture-v2.win32-x64.node
+            native-artifacts.json

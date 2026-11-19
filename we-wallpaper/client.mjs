@@ -9,8 +9,16 @@ import { watchOpaqueBackground } from './client/opaque.mjs';
 import { mountDesktopInput } from './client/input.mjs';
 
 // Keep the established background id so existing Folia selections continue to work.
-export default function activate(folium) {
-    if (!isMainContext(folium) || window.foliaWeNative?.version !== NATIVE_VERSION) return;
+export default async function activate(folium) {
+    if (!isMainContext(folium)) return;
+    if (window.foliaWeNative?.version !== NATIVE_VERSION) {
+        const ready = await new Promise(resolve => {
+            const loaded = () => { window.removeEventListener('folia-we-native-ready', loaded); resolve(true); };
+            window.addEventListener('folia-we-native-ready', loaded);
+            folium.onDispose(() => { window.removeEventListener('folia-we-native-ready', loaded); resolve(false); });
+        });
+        if (!ready || window.foliaWeNative?.version !== NATIVE_VERSION) return;
+    }
     const navigation = createDesktopNavigation(folium);
     watchOpaqueBackground(folium);
     folium.registries.styles.register({ id: 'native-wallpaper', css: styles });
