@@ -202,9 +202,14 @@ export function mountBackground(folium, container, ctx) {
         if (key !== lastGeometry) { lastGeometry = key; viewport = next; schedule(); }
     };
     const stopResize = ctx.onResize(geometry);
+    let lastSettings = '';
     const stopChange = ctx.onChange(() => {
         if (!owner.active()) stopLive();
-        else schedule();
+        else {
+            const settings = ctx.getSettings();
+            const key = JSON.stringify([settings.source, settings.followWE, settings.presetName, settings.fps]);
+            if (key !== lastSettings) { lastSettings = key; schedule(); }
+        }
     });
     let selected = owner.active();
     const selectionChanged = () => {

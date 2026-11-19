@@ -1,5 +1,6 @@
 import { translator } from './labels.mjs';
 import { NATIVE_VERSION, isMainContext, callHost } from './support.mjs';
+import { placeNavigation } from './navigationLayout.mjs';
 
 // Desktop attachment and remembered window bounds belong to the mod main entry.
 export function createDesktopNavigation(folium) {
@@ -14,6 +15,8 @@ export function createDesktopNavigation(folium) {
     let pending = Promise.resolve();
     let active = pending;
     const listeners = new Set();
+    const layoutListeners = new Set();
+    let hitRegion = null;
     const publish = () => { for (const listener of listeners) listener(); };
     const report = error => { if (!disposed) folium.ui.toast(error.message, { type: 'error' }); };
     const applyState = state => {
@@ -94,7 +97,7 @@ export function createDesktopNavigation(folium) {
             await suspendDesktop();
         }
     })().catch(error => { if (!disposed) folium.log.error(error.message); });
-    folium.onDispose(() => { disposed = true; ++generation; listeners.clear(); });
+    folium.onDispose(() => { disposed = true; ++generation; listeners.clear(); layoutListeners.clear(); });
     return {
         enter, leave, ready,
         onNativeReady() {
@@ -106,6 +109,13 @@ export function createDesktopNavigation(folium) {
         get desktop() { return desktop; },
         get busy() { return busy; },
         subscribe(listener) { listeners.add(listener); return () => listeners.delete(listener); },
+        get hitRegion() { return hitRegion; },
+        setHitRegion(rect) {
+            if (JSON.stringify(hitRegion) === JSON.stringify(rect)) return;
+            hitRegion = rect;
+            for (const listener of layoutListeners) listener();
+        },
+        onLayout(listener) { layoutListeners.add(listener); return () => layoutListeners.delete(listener); },
     };
 }
 
@@ -125,11 +135,19 @@ export function mountNavigation(folium, container, ctx, navigation) {
     let keyboardFocused = false;
     let touchTimer;
     folium.ui.icon('list-music', { size: 16 }).then(icon => { if (icon && !disposed) button.prepend(icon); });
+    let position = null;
     const render = () => {
         const display = ctx.getDisplay();
-        const unavailable = display.isPlayerChromeHidden || display.visualizerOpacity === 0;
-        const hidden = unavailable || (!nearby && !keyboardFocused);
         caption.textContent = navigation.desktop ? t('chooseSong') : t('returnDesktop');
+        const viewportHeight = navigation.desktop ? innerHeight * Math.min(1, screen.availHeight / screen.height) : innerHeight;
+        position = placeNavigation({ width:innerWidth, height:viewportHeight }, { width:button.offsetWidth, height:button.offsetHeight }, ctx.getLayout());
+        if (position) {
+            button.style.right = 'auto'; button.style.bottom = 'auto';
+            button.style.left = position.left + 'px'; button.style.top = position.top + 'px';
+        }
+        navigation.setHitRegion(display.visualizerOpacity > 0 ? position : null);
+        const unavailable = !position || display.isPlayerChromeHidden || display.visualizerOpacity === 0;
+        const hidden = unavailable || (!nearby && !keyboardFocused);
         button.disabled = navigation.busy || unavailable;
         button.style.opacity = String(hidden ? 0 : display.visualizerOpacity * (navigation.busy ? 0.6 : 1));
         button.style.transform = hidden ? 'translateY(6px) scale(.92)' : 'translateY(0) scale(1)';
@@ -144,7 +162,8 @@ export function mountNavigation(folium, container, ctx, navigation) {
         nearby = next;
         render();
     };
-    const move = event => reveal(event.clientX >= window.innerWidth - 240 && event.clientY >= window.innerHeight - 200);
+    const move = event => reveal(Boolean(position && event.clientX >= position.left - 32 && event.clientX <= position.left + position.width + 32
+        && event.clientY >= position.top - 32 && event.clientY <= position.top + position.height + 32));
     const leave = () => { clearTimeout(touchTimer); reveal(false); };
     const touch = event => {
         if (event.pointerType !== 'touch') return;
@@ -160,7 +179,10 @@ export function mountNavigation(folium, container, ctx, navigation) {
     window.addEventListener('pointercancel', cancel, true);
     document.addEventListener('mouseleave', leave);
     window.addEventListener('blur', leave);
-    window.addEventListener('resize', leave);
+    const resized = () => { leave(); render(); };
+    window.addEventListener('resize', resized);
+    const resize = new ResizeObserver(render);
+    resize.observe(button);
     render();
     button.onclick = () => {
         const action = navigation.desktop ? navigation.leave() : navigation.enter();
@@ -169,13 +191,15 @@ export function mountNavigation(folium, container, ctx, navigation) {
     return () => {
         disposed = true;
         off(); offDisplay();
+        resize.disconnect();
+        navigation.setHitRegion(null);
         clearTimeout(touchTimer);
         window.removeEventListener('mousemove', move, true);
         window.removeEventListener('pointerdown', touch, true);
         window.removeEventListener('pointercancel', cancel, true);
         document.removeEventListener('mouseleave', leave);
         window.removeEventListener('blur', leave);
-        window.removeEventListener('resize', leave);
+        window.removeEventListener('resize', resized);
         button.remove(); style.remove();
     };
 }

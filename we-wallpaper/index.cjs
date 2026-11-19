@@ -172,17 +172,11 @@ module.exports = function activate(api) {
     });
     handle('enter-desktop', async () => { await ready; return host.setEnabled(true); });
     handle('leave-desktop', async () => { await ready; return host.setEnabled(false); });
-    handle('prepare-desktop', async () => {
-        await ready;
-        await desktop.remember();
-        return true;
-    });
     handle('suspend-desktop', async () => {
         await ready;
         const owner = runtime.active && bridge.window(runtime.active.consumerId);
         if (owner?.__foliaWeDesktop) await desktop.hide();
     });
-    handle('restore-desktop', async () => { await ready; await desktop.restore(); });
     handle('properties', async (id, preset, patch) => {
         await ready;
         const key = propertyKey(id, preset);
@@ -197,13 +191,6 @@ module.exports = function activate(api) {
         await runtime.updateProperties(id, preset, description.properties);
         return description;
     });
-    handle('reload-host', () => {
-        const window = mainWindow();
-        if (!window) throw new Error('没有找到 Folia 主窗口');
-        setImmediate(() => window.webContents.reload());
-        return true;
-    });
-
     return ready.catch(error => {
         api.log.error('[WE wallpaper] ' + error.message);
         throw error;
