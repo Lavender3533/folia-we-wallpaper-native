@@ -42,13 +42,9 @@ pub fn place_window(raw: *mut std::ffi::c_void, x: i32, y: i32, width: i32, heig
         let _apartment = Apartment;
         let previous = SetThreadDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
         let hwnd = HWND(raw);
-        let style = GetWindowLongPtrW(hwnd, GWL_STYLE) as u32;
-        SetWindowLongPtrW(hwnd, GWL_STYLE, (style & !(WS_CAPTION.0 | WS_THICKFRAME.0 | WS_BORDER.0)) as isize);
-        let extended = GetWindowLongPtrW(hwnd, GWL_EXSTYLE) as u32;
-        // WGC rejects windows marked TOOLWINDOW or NOACTIVATE on Windows 11 23H2.
-        SetWindowLongPtrW(hwnd, GWL_EXSTYLE, (extended & !(WS_EX_TOOLWINDOW.0 | WS_EX_NOACTIVATE.0)) as isize);
+        // WE creates this window with -borderless; do not synchronously change its cross-process styles.
         let result = SetWindowPos(hwnd, Some(HWND_BOTTOM), x, y, width, height,
-            SWP_NOACTIVATE | SWP_NOOWNERZORDER | SWP_FRAMECHANGED | SWP_SHOWWINDOW);
+            SWP_ASYNCWINDOWPOS | SWP_NOACTIVATE | SWP_NOOWNERZORDER | SWP_SHOWWINDOW);
         SetThreadDpiAwarenessContext(previous);
         let taskbar: ITaskbarList = CoCreateInstance(&TaskbarList, None, CLSCTX_INPROC_SERVER)?;
         taskbar.HrInit()?;
