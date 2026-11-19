@@ -123,40 +123,61 @@ export function mountNavigation(folium, container, ctx, navigation) {
     if (!isMainContext(folium) || window.foliaWeNative?.version !== NATIVE_VERSION) return;
     const t = translator();
     const style = document.createElement('style');
-    style.textContent = '.we-navigation{position:absolute;right:24px;bottom:108px;display:flex;align-items:center;gap:8px;min-height:40px;padding:8px 16px;border:0;border-radius:20px;background:rgba(0,0,0,.2);color:rgba(255,255,255,.6);backdrop-filter:blur(12px);font:13px "Segoe UI","Microsoft YaHei UI",sans-serif;cursor:pointer;opacity:0;pointer-events:none;transition:opacity .2s ease-out,transform .2s ease-out,background-color .15s ease}.we-navigation:hover{background:rgba(255,255,255,.1)}.we-navigation:focus-visible{outline:2px solid currentColor;outline-offset:3px}.we-navigation:disabled{cursor:wait}';
+    style.textContent =
+        '.we-navigation{position:absolute;box-sizing:border-box;width:48px;height:48px;padding:0;display:flex;align-items:center;justify-content:center;border:0;border-radius:50%;background:rgba(0,0,0,.4);color:#fff;backdrop-filter:blur(12px);box-shadow:0 10px 15px -3px rgba(0,0,0,.1),0 4px 6px -4px rgba(0,0,0,.1);font:12px "Segoe UI","Microsoft YaHei UI",sans-serif;cursor:pointer;opacity:0;transition:opacity .2s ease-out,background-color .15s ease}' +
+        '.we-navigation{transition:opacity .2s ease-out,background-color .15s ease,transform .3s ease}.we-navigation[data-daylight=true]{background:rgba(255,255,255,.7);color:#18181b}.we-navigation:hover{background:rgba(0,0,0,.55)}.we-navigation[data-daylight=true]:hover{background:rgba(255,255,255,.85)}' +
+        '.we-navigation:focus-visible{outline:2px solid currentColor;outline-offset:3px}.we-navigation:disabled{cursor:wait}.we-navigation svg{width:20px;height:20px;transition:transform .15s ease}.we-navigation:active svg{transform:scale(.9)}' +
+        '.we-navigation[data-desktop=true] [data-icon=monitor],.we-navigation[data-desktop=false] [data-icon=list-music]{display:none}' +
+        '.we-navigation-label{position:absolute;right:calc(100% + 12px);top:50%;padding:6px 10px;border-radius:8px;white-space:nowrap;line-height:1.5;color:inherit;background:inherit;backdrop-filter:blur(12px);pointer-events:none;opacity:0;visibility:hidden;transform:translate(4px,-50%);transition:opacity .15s ease,transform .15s ease,visibility .15s}' +
+        '.we-navigation:hover .we-navigation-label,.we-navigation:focus-visible .we-navigation-label{opacity:1;visibility:visible;transform:translate(0,-50%)}' +
+        '@media(prefers-reduced-motion:reduce){.we-navigation,.we-navigation svg,.we-navigation-label{transition:none}}';
     const button = document.createElement('button');
-    style.textContent += '.we-navigation{box-sizing:border-box}.we-navigation span{white-space:nowrap}.we-navigation[data-compact="true"]{padding:8px;gap:0}.we-navigation[data-compact="true"] span{position:absolute;visibility:hidden;width:max-content}';
     button.type = 'button';
     button.className = 'we-navigation';
     const caption = document.createElement('span');
-    button.appendChild(caption);
+    caption.className = 'we-navigation-label';
+    caption.setAttribute('aria-hidden', 'true');
+    button.append(caption);
     container.append(style, button);
     let disposed = false;
     let nearby = false;
     let keyboardFocused = false;
     let touchTimer;
-    folium.ui.icon('list-music', { size: 16 }).then(icon => { if (icon && !disposed) button.prepend(icon); });
+    for (const name of ['monitor', 'list-music']) {
+        folium.ui.icon(name, { size:20 }).then(icon => {
+            if (!icon || disposed) return;
+            icon.dataset.icon = name;
+            icon.setAttribute('aria-hidden', 'true');
+            button.prepend(icon);
+        });
+    }
     let position = null;
+    let panelMotion = null;
+    const panelMotionChanged = new MutationObserver(() => render());
     const render = () => {
         const display = ctx.getDisplay();
         caption.textContent = navigation.desktop ? t('chooseSong') : t('returnDesktop');
         button.setAttribute('aria-label', caption.textContent);
-        const viewportHeight = navigation.desktop ? innerHeight * Math.min(1, screen.availHeight / screen.height) : innerHeight;
-        position = placeNavigation({ width:innerWidth, height:viewportHeight }, { width:caption.offsetWidth + 56, height:button.offsetHeight }, ctx.getLayout());
-        button.dataset.compact = String(Boolean(position?.compact));
-        button.title = position?.compact ? caption.textContent : '';
-        if (position) {
-            button.style.width = position.width + 'px';
-            button.style.right = 'auto'; button.style.bottom = 'auto';
-            button.style.left = position.left + 'px'; button.style.top = position.top + 'px';
+        button.dataset.desktop = String(navigation.desktop);
+        button.dataset.daylight = String(ctx.getTheme().isDaylight);
+        position = placeNavigation({ width:innerWidth, height:innerHeight }, ctx.getLayout());
+        button.style.left = position.left + 'px';
+        button.style.top = position.top + 'px';
+        const narrow = innerWidth < 768;
+        const nativeMotion = narrow ? document.querySelector('[data-testid="panel-toggle"] > div') : null;
+        if (nativeMotion !== panelMotion) {
+            panelMotionChanged.disconnect();
+            panelMotion = nativeMotion;
+            if (panelMotion) panelMotionChanged.observe(panelMotion, { attributes:true, attributeFilter:['class'] });
         }
-        navigation.setHitRegion(display.visualizerOpacity > 0 ? position : null);
-        const unavailable = !position || display.isPlayerChromeHidden || display.visualizerOpacity === 0;
-        const hidden = unavailable || (!nearby && !keyboardFocused);
+        const tucked = panelMotion?.classList.contains('translate-x-1/2') && !panelMotion.parentElement.matches(':hover');
+        button.style.transform = tucked ? 'translateX(24px)' : 'translateX(0)';
+        const unavailable = display.isPlayerChromeHidden || display.isPanelOpen || display.visualizerOpacity === 0 || position.top < 0;
+        // Include the native narrow-window slide so input stays aligned throughout its transition.
+        navigation.setHitRegion(unavailable ? null : { ...position, width:position.width + (narrow ? 24 : 0) });
         button.disabled = navigation.busy || unavailable;
-        button.style.opacity = String(hidden ? 0 : display.visualizerOpacity * (navigation.busy ? 0.6 : 1));
-        button.style.transform = hidden ? 'translateY(6px) scale(.92)' : 'translateY(0) scale(1)';
-        button.style.pointerEvents = hidden ? 'none' : 'auto';
+        button.style.opacity = String(unavailable ? 0 : display.visualizerOpacity * (navigation.busy ? 0.4 : nearby || keyboardFocused ? 1 : 0.6));
+        button.style.pointerEvents = unavailable ? 'none' : 'auto';
         button.setAttribute('aria-hidden', String(unavailable));
         button.tabIndex = unavailable ? -1 : 0;
     };
@@ -167,8 +188,12 @@ export function mountNavigation(folium, container, ctx, navigation) {
         nearby = next;
         render();
     };
-    const move = event => reveal(Boolean(position && event.clientX >= position.left - position.revealPadding && event.clientX <= position.left + position.width + position.revealPadding
-        && event.clientY >= position.top - position.revealPadding && event.clientY <= position.top + position.height + position.revealPadding));
+    // Both circles share a reveal area, while their actual click targets stay separate.
+    const move = event => reveal(Boolean(position && (
+        (event.clientX >= innerWidth - 240 && event.clientY >= innerHeight - 200) ||
+        (event.clientX >= position.left - position.revealPadding && event.clientX <= position.left + position.width + position.revealPadding
+            && event.clientY >= position.top - position.revealPadding && event.clientY <= position.top + position.height * 2 + 12)
+    )));
     const leave = () => { clearTimeout(touchTimer); reveal(false); };
     const touch = event => {
         if (event.pointerType !== 'touch') return;
@@ -186,8 +211,6 @@ export function mountNavigation(folium, container, ctx, navigation) {
     window.addEventListener('blur', leave);
     const resized = () => { leave(); render(); };
     window.addEventListener('resize', resized);
-    const resize = new ResizeObserver(render);
-    resize.observe(button);
     render();
     button.onclick = () => {
         const action = navigation.desktop ? navigation.leave() : navigation.enter();
@@ -196,7 +219,7 @@ export function mountNavigation(folium, container, ctx, navigation) {
     return () => {
         disposed = true;
         off(); offDisplay();
-        resize.disconnect();
+        panelMotionChanged.disconnect();
         navigation.setHitRegion(null);
         clearTimeout(touchTimer);
         window.removeEventListener('mousemove', move, true);

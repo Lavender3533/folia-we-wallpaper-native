@@ -6,7 +6,7 @@ const { contextBridge, ipcRenderer, sharedTexture } = require('electron');
 async function initialize() {
     const prefix = 'folia-we-native:';
     if (!await ipcRenderer.invoke(prefix + 'bootstrap')) return;
-    const version = '0.4.2';
+    const version = '0.4.3';
     const canvases = new Map();
 
     sharedTexture.setSharedTextureReceiver(async ({ importedSharedTexture }, consumerId) => {
