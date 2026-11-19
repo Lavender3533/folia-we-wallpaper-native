@@ -77,13 +77,33 @@ export function mountBackground(folium, container, ctx) {
     const native = surface.native;
     const consumerId = surface.id;
     let disposed = false;
+    let heldFrame = null;
+    const available = () => !disposed && container.isConnected && !layer.closest('[inert]') && isBackgroundSelected(folium);
     const owner = {
-        active: () => !disposed && surface.owner === owner && container.isConnected
-            && !layer.hasAttribute('inert') && isBackgroundSelected(folium),
+        active: () => surface.owner === owner && available(),
+        holdFrame() {
+            if (disposed || !root.isConnected || canvas.parentElement !== root || canvas.width < 2 || canvas.height < 2) return;
+            heldFrame ||= document.createElement('canvas');
+            heldFrame.width = canvas.width; heldFrame.height = canvas.height;
+            heldFrame.getContext('2d', { alpha:false }).drawImage(canvas, 0, 0);
+            root.prepend(heldFrame);
+        },
     };
-    clearTimeout(surface.releaseTimer);
-    surface.owner = owner;
-    root.prepend(canvas);
+    const clearHeldFrame = () => {
+        if (!heldFrame) return;
+        heldFrame.width = 1; heldFrame.height = 1; heldFrame.remove(); heldFrame = null;
+    };
+    const claim = () => {
+        if (!available()) return false;
+        if (surface.owner === owner) return true;
+        clearTimeout(surface.releaseTimer);
+        surface.owner?.holdFrame();
+        surface.owner = owner;
+        clearHeldFrame();
+        root.prepend(canvas);
+        return true;
+    };
+    claim();
     let starting = false;
     let requested = false;
     let timer;
@@ -213,6 +233,7 @@ export function mountBackground(folium, container, ctx) {
     });
     let selected = owner.active();
     const selectionChanged = () => {
+        if (available() && !surface.owner?.active()) claim();
         const next = owner.active();
         if (next === selected) return;
         selected = next;
@@ -236,7 +257,7 @@ export function mountBackground(folium, container, ctx) {
     if (native?.version !== NATIVE_VERSION) message.textContent = t('reloadHint');
     else {
         if (!surface.ready) message.textContent = t('opening');
-        else ctx.onNativeReady?.();
+        else if (owner.active()) ctx.onNativeReady?.();
         geometry();
     }
 
@@ -283,9 +304,10 @@ export function mountBackground(folium, container, ctx) {
             const release = () => {
                 if (!surface.owner) { stopSurface(surface, true); ctx.onNativeStopped?.(); }
             };
-            if (!isBackgroundSelected(folium) || layer.hasAttribute('inert')) release();
+            if (!isBackgroundSelected(folium)) release();
             else surface.releaseTimer = setTimeout(release, 250);
         }
+        clearHeldFrame();
         root.remove();
     };
 }
