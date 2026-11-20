@@ -31,8 +31,12 @@ module.exports = function activate(api) {
     let cleanupPromise;
     const cleanupKey = Symbol.for('folia-we-native-cleanup');
     const previousCleanup = globalThis[cleanupKey] || Promise.resolve();
-    const handlers = new Map();
-    const handle = (name, handler) => handlers.set(name, handler);
+    // Folia 0.7.27 RPC does not expose the sender; bind calls to the main-frame bootstrap grant.
+    const handle = (name, handler) => api.rpc.handle(name, async (session, ...args) => {
+        await ready;
+        if (!bridge?.allowsRequest(session)) throw new Error('WE operations require the current Folia main window');
+        return handler(...args);
+    });
     const previewToken = randomBytes(24).toString('hex');
     let saved = {};
     const propertyKey = (id, preset) => id + ':' + preset;
@@ -73,11 +77,6 @@ module.exports = function activate(api) {
         if (disposed) return;
         bridge = installTextureBridge({
             getMainWindow: mainWindow,
-            onRequest: (name, args) => {
-                const handler = handlers.get(name);
-                if (!handler) throw new Error('Unknown WE operation');
-                return handler(...args);
-            },
             onDetach: consumerId => { void runtime?.stop(consumerId).catch(error => api.log.error('[WE wallpaper] ' + error.message)); },
             onPointer: data => runtime?.pointer(data),
             onError: (error, capture) => runtime?.fail(error, capture),

@@ -52,7 +52,7 @@ export function mountDesktopInput(folium, ctx, navigation) {
             const key = JSON.stringify(rects);
             if(key === signature) return;
             signature = key;
-            void callHost('desktop-input-regions',rects).catch(error => { if(!disposed) folium.log.error('[WE desktop input] ' + error.message); });
+            void callHost(folium, 'desktop-input-regions',rects).catch(error => { if(!disposed) folium.log.error('[WE desktop input] ' + error.message); });
         });
     };
     let observedPopups = [];
@@ -84,6 +84,6 @@ export function mountDesktopInput(folium, ctx, navigation) {
         offLayout(); offNavigation(); offButton();
         popupResize.disconnect(); popupObserver.disconnect(); popupStyle.disconnect();
         window.removeEventListener('resize',report);
-        void callHost('desktop-input-regions',[]).catch(() => {});
+        void callHost(folium, 'desktop-input-regions',[]).catch(() => {});
     };
 }

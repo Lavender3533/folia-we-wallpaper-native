@@ -83,6 +83,6 @@ export default async function activate(folium) {
     folium.registries.commands.register({
         id: 'refresh-we-wallpapers',
         label: label('刷新 WE 壁纸列表', 'Refresh WE wallpaper library', 'Muat ulang pustaka WE'),
-        run: async () => { await callHost('refresh'); },
+        run: async () => { await callHost(folium, 'refresh'); },
     });
 }

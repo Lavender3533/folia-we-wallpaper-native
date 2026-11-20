@@ -29,6 +29,6 @@ export function mountSummary(folium, container, ctx, selectProperties) {
     const offStatus=folium.rpc.on('native-status',render);
     const offSelection=folium.rpc.on('we-selection',({id})=>{if(snapshot){snapshot.selectedId=id;selection();}});
     theme();
-    void callHost('assets').then(value=>{if(disposed)return;snapshot=value;render(value.native);selection();}).catch(error=>{if(!disposed)status.textContent=error.message;});
+    void callHost(folium, 'assets').then(value=>{if(disposed)return;snapshot=value;render(value.native);selection();}).catch(error=>{if(!disposed)status.textContent=error.message;});
     return ()=>{disposed=true;offTheme();offSettings();offStatus();offSelection();root.remove();};
 }

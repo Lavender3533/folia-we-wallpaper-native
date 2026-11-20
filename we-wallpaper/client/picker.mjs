@@ -93,10 +93,10 @@ export function mountPicker(folium, container, ctx, selection, navigation) {
     const load = async refreshLibrary => {
         const request = ++loadSequence; refresh.disabled = true; status.textContent = t('loading');
         try {
-            const value = await callHost(refreshLibrary ? 'refresh' : 'assets');
+            const value = await callHost(folium, refreshLibrary ? 'refresh' : 'assets');
             if (disposed || request !== loadSequence) return;
             snapshot = value; render();
-            const current = snapshot.native || await callHost('status');
+            const current = snapshot.native || await callHost(folium, 'status');
             if (request === loadSequence) stateText(current);
         } catch(error) { if(!disposed && request === loadSequence) status.textContent = error.message; }
         finally { if(!disposed && request === loadSequence) refresh.disabled = false; }

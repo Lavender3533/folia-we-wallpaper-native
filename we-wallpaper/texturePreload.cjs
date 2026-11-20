@@ -1,12 +1,14 @@
 'use strict';
 
-const { contextBridge, ipcRenderer, sharedTexture } = require('electron');
+const { contextBridge, ipcRenderer } = require('electron');
 
 // Draw inside the isolated world so a VideoFrame never crosses contextBridge.
 async function initialize() {
     const prefix = 'folia-we-native:';
-    if (!await ipcRenderer.invoke(prefix + 'bootstrap')) return;
-    const version = '0.4.7';
+    const rpcSession = await ipcRenderer.invoke(prefix + 'bootstrap');
+    if (!rpcSession) return;
+    const { sharedTexture } = require('electron');
+    const version = '0.4.8';
     const canvases = new Map();
 
     sharedTexture.setSharedTextureReceiver(async ({ importedSharedTexture }, consumerId) => {
@@ -35,7 +37,7 @@ async function initialize() {
 
     contextBridge.exposeInMainWorld('foliaWeNative', {
         version,
-        request: (name, args) => ipcRenderer.invoke(prefix + 'request', name, args),
+        rpcSession,
         expectFrame(consumerId) { const target = canvases.get(consumerId); if (target) target.size = ''; },
         async attachCanvas(canvasId, consumerId) {
             const roots = [document];

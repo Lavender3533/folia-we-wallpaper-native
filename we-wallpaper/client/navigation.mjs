@@ -24,7 +24,7 @@ export function createDesktopNavigation(folium) {
         if (!busy) requestedDesktop = desktop;
         publish();
     };
-    const suspendDesktop = () => !disposed && desktop && nativeReady ? callHost('suspend-desktop') : Promise.resolve();
+    const suspendDesktop = () => !disposed && desktop && nativeReady ? callHost(folium, 'suspend-desktop') : Promise.resolve();
     const waitForHost = new Promise(resolve => {
         const stopWaiting = folium.every(50, () => {
             try { folium.playback.getState(); }
@@ -39,7 +39,7 @@ export function createDesktopNavigation(folium) {
         if (disposed) return;
         if (settings.wallpaper_mode) await window.electron.saveSettings('wallpaper_mode', false);
         if (disposed) return;
-        const state = await callHost('desktop-state');
+        const state = await callHost(folium, 'desktop-state');
         if (!disposed) applyState(state);
         return state;
     })();
@@ -55,7 +55,7 @@ export function createDesktopNavigation(folium) {
             await waitForHost;
             if (disposed || request !== generation) return;
             if (enabled) folium.ui.navigate('player');
-            const state = await callHost(enabled ? 'enter-desktop' : 'leave-desktop');
+            const state = await callHost(folium, enabled ? 'enter-desktop' : 'leave-desktop');
             if (disposed) return;
             applyState(state);
             if (request !== generation) return;

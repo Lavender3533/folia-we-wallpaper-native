@@ -54,7 +54,7 @@ function mountPreview(folium, root, ctx, message) {
     const stopSelection = folium.rpc.on('we-selection', ({ id }) => {
         if (snapshot) { snapshot.selectedId = id; render(); }
     });
-    callHost('assets').then(result => { snapshot = result; render(); })
+    callHost(folium, 'assets').then(result => { snapshot = result; render(); })
         .catch(error => { if (!disposed) message.textContent = error.message; });
     return () => { disposed = true; stopChange(); stopSelection(); root.remove(); };
 }
@@ -187,7 +187,7 @@ export function mountBackground(folium, container, ctx) {
             surface.requestKey = key;
             const epoch = surface.epoch;
             try {
-                const state = await callHost('start', params);
+                const state = await callHost(folium, 'start', params);
                 if (epoch === surface.epoch && surface.requestKey === key) status(state);
             } catch (value) {
                 if (surface.requestKey === key) surface.requestKey = '';
@@ -205,7 +205,7 @@ export function mountBackground(folium, container, ctx) {
     };
     const recover = () => {
         if (document.hidden || !owner.active()) return;
-        void callHost('status').then(state => {
+        void callHost(folium, 'status').then(state => {
             if (!owner.active()) return;
             status(state);
             if (state.phase === 'error' || state.phase === 'idle' || state.phase === 'paused') {
